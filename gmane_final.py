@@ -1,7 +1,7 @@
 import sqlite3
-import urllib.request, urllib.parse, urllib.errors
+import urllib.request, urllib.parse, urllib.error
 import time
-import SSL
+import ssl
 import re
 
 #check if dateutil.parser exits
@@ -15,7 +15,7 @@ except:
 def parsemaildate(md) :
     # See if we have dateutil
     try:
-        pdate = parser.parse(tdate)
+        pdate = parser.parse(date)
         test_at = pdate.isoformat()
         return test_at
     except:
@@ -63,23 +63,27 @@ ctx.check_hostname=False
 ctx.verify_mode=ssl.CERT_NONE
 
 # create email message table
-conn=sqlite3.connect(rawemail.sqlite)
+conn=sqlite3.connect('rawemail.sqlite')
 cur=conn.cursor()
 
-cur.execute('''CREATE TABLE IF NOT EXISTS Messsages
+cur.execute('''CREATE TABLE IF NOT EXISTS Messages
     (id INTEGER UNIQUE, email TEXT, sent_at TEXT,
-    subject TEXT, head TEXT, body TEXT)''')
+    subject TEXT, header TEXT, body TEXT)''')
 
-baseurl='http://mbox.dr-chuck.net/'
+baseurl='http://mbox.dr-chuck.net/sakai.devel/'
 
 #decide which id to start spidering
-start=None
 cur.execute('SELECT max(id) from Messages')
 try:
-    start=cur.fetchone()[0]
-    start=start+1
+    row=cur.fetchone()
+    if row is None:
+        start=0
+    else:
+        start=row[0]
 except:
-    start=1
+    start=0
+
+if start is None: start=0
 
 number=0
 fail=0
@@ -90,25 +94,26 @@ while True:
         number=int(round)
     except: break
 
-    if len(number)<1: break
+    if len(round)<1: break
 
-    while number>1
+    while number>1:
+        start=start+1
         url=baseurl+str(start)+'/'+str(start+1)
         text='None'
         try:
             #open with 30s timeout
-            fhand=urllib.request.urlopen(url, none, 30)
+            fhand=urllib.request.urlopen(url, None, 30, context=ctx)
             text=fhand.read().decode()
             #end this round if have any connection error in retrieving the web page
-            if document.getcode() != 200 :
-                print("Error code=",document.getcode(), url)
+            if fhand.getcode() != 200 :
+                print("Error code=",fhand.getcode(), url)
                 break
         except KeyboardInterrupt:
             print('page retrieving is interrupted by user!')
             break
         except Exception as expt:
             print('unable to retrieve the page, ', url)
-            print('error code is ', exp)
+            print('error code is ', expt)
             fail=fail+1
             if fail>5: break
             continue
@@ -120,7 +125,7 @@ while True:
             if fail>5: break
             continue
 
-        count=count+1
+
         #find header and body, there is a break line between header and body
         #it is the first break line in a record. we can use this to retrieve
         #the header
@@ -138,7 +143,7 @@ while True:
         #retrieve email address from header
         email=None
         x=re.findall('\nFrom: .*<(\S+@\S+)>\n', header)
-        if len(x==1):
+        if len(x)==1:
             email=x[0]
             email=email.strip().lower()
             email=email.replace("<", "")
@@ -152,28 +157,31 @@ while True:
         #retrieve date from header
         date=None
         y=re.findall("\nDate: .*, (.*)\n", header)
-        if len(y==1):
+        if len(y)==1:
             date=y[0]
             date=date[:26]
+            print('date is ', date)
             try:
                 sent_at=parsemaildate(date)
+                print('sent_at: ', sent_at)
             except:
-                print('cannot parse date!!! ' date)
+                print('cannot parse date!!! ', date)
                 print(text)
                 fail=fail+1
                 if fail>5: break
                 continue
 
         subject=None
-        z=re.findall('\nSubject: (.*)\n', hdr)
+        z=re.findall('\nSubject: (.*)\n', header)
         if len(z)==1: subject=z[0].strip().lower()
 
         print("email, sent_at and subject are set to: ", email, sent_at, subject)
-        cur.execute(''' INSERT OR IGNORE INTO Messages (id, email, sent_at, subject, headers, body)
+        cur.execute(''' INSERT OR IGNORE INTO Messages (id, email, sent_at, subject, header, body)
             VALUES (?,?,?,?,?,?)''', (start, email, sent_at, subject, header, body))
+        count=count+1
         #commit every 50 records, sleep every 100 records
         if count%50==0: conn.commit()
-        if count%100==0: conn.commit(sleep(1))
+        if count%100==0: time.sleep(1)
         number=number-1
 
 conn.commit()
