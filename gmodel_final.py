@@ -10,7 +10,7 @@ import sqlite3
 import time
 import re
 import zlib
-import datetime import datetime, timedelta
+from datetime import datetime, timedelta
 
 #dateutil needs to be installed in Python 3
 try:
@@ -30,7 +30,7 @@ def fixsender(sender, allsenders=None):
     sender=sender.replace('<', '').replace('>','')
 
     #check if gmane.org email address is in the list
-    if all senders is not None and sender.endswith('gmane.org'):
+    if allsenders is not None and sender.endswith('gmane.org'):
         pieces=sender.split('-')
         realsender=None
         for s in allsenders:
@@ -50,7 +50,7 @@ def fixsender(sender, allsenders=None):
     if len(mpieces)!=2: return sender
     dns=mpieces[1]
     pieces=dns.split(".")
-    if dns.endswith(".edu") or dns.endswith(".com") or dis.endswith(".org") or dns.endswith(".net"):
+    if dns.endswith(".edu") or dns.endswith(".com") or dns.endswith(".org") or dns.endswith(".net"):
         dns=".".join(pieces[-2:])
     else:
         dns=".".join(pieces[-3:])
@@ -76,7 +76,7 @@ def parsemaildata(md):
     # refer to this website https://www.tutorialspoint.com/python/time_strptime.htm for format
     for form in ['%d %b %Y %H:%M:%S', '%d %b %Y %H:%M:%S',
         '%d %b %Y %H:%M', '%d %b %Y %H:%M', '%d %b %y %H:%M:%S',
-        '%d %b %y %H:%M:%S', '%d %b %y %H:%M', '%d %b %y %H:%M' ]
+        '%d %b %y %H:%M:%S', '%d %b %y %H:%M', '%d %b %y %H:%M' ]:
         try:
             dnotz=datetime.strptime(notz, form)
             break
@@ -120,7 +120,7 @@ def parseheader(hdr,allsenders=None):
         tdate=tdate[:26]
         try:
             sent_at=parsemaildate(tdate)
-        except: Exception as e:
+        except Exception as e:
             return None
 
     subject=None
@@ -138,13 +138,13 @@ def parseheader(hdr,allsenders=None):
 conn=sqlite3.connect('index.sqlite')
 cur=conn.cursor()
 
-cur.execute('DROP TABLE IS EXISTS Messges')
-cur.execute('DROP TABLE IS EXISTS Senders')
-cur.execute('DROP TABLE IS EXISTS Subjects')
-cur.execute('DROP TABLE IS EXISTS Replies')
+cur.execute('DROP TABLE IF EXISTS Messges')
+cur.execute('DROP TABLE IF EXISTS Senders')
+cur.execute('DROP TABLE IF EXISTS Subjects')
+cur.execute('DROP TABLE IF EXISTS Replies')
 
 # Blob data is a field that holds large amounts of data per record.
-cur.execute('''CREATE TABLE IS NOT EXISTS Messages
+cur.execute('''CREATE TABLE IF NOT EXISTS Messages
     (id INTEGER PRIMARY KEY, guid TEXT UNIQUE, sent_at INTEGER,
      sender_id INTEGER, subject_id INTEGER,headers BLOB, body BLOB)''')
 cur.execute('''CREATE TABLE IF NOT EXISTS Senders
@@ -177,7 +177,7 @@ cur_1=conn_1.cursor()
 allsenders=list()
 cur_1.execute('SELECT email FROM Messages')
 for message_row in cur_1:
-    sender=fixsender(message[0])
+    sender=fixsender(message_row[0])
     if sender is None: continue
     if 'gmane.org' in sender: continue
     if sender in allsenders: continue
@@ -196,7 +196,7 @@ count=0
 
 for message_row in cur_1:
     hdr=message_row[0]
-    parsed=parseheader(hdr, allsender)
+    parsed=parseheader(hdr, allsenders)
     if parsed is None: continue
     (guid,sender,subject,sent_at)=parsed
 
@@ -236,8 +236,9 @@ for message_row in cur_1:
             print('cannot retrieve subject id', subject)
             break
 
-    cur.execute('INSERT OR IGNORE INTO Messages (guid, sender_id, subject_id, sent_at, headers, body) VALUES (?,?,?,datetime(?),?,?)'),
-            (guid, sender_id, subject_id, sent_at, zlib.compress(message_row[0].encode()), zlib.compress(message_row[1].encode())))
+    cur.execute('INSERT OR IGNORE INTO Messages (guid, sender_id, subject_id, sent_at, headers, body) VALUES (?,?,?,datetime(?),?,?)',
+            (guid, sender_id, subject_id, sent_at,
+            zlib.compress(message_row[0].encode()), zlib.compress(message_row[1].encode())))
     conn.commit()
     cur.execute('SELECT id FROM Message WHERE guid=? LIMIT 1', (guid, ))
     try:
