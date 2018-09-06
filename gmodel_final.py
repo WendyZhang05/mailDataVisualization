@@ -216,4 +216,37 @@ for message_row in cur_1:
         cur.execute('INSERT OR IGNORE INTO Senders(sender) VALUES(?)', (sender,))
         conn.commit()
         cur.execute('SELECT FROM Senders WHERE sender=? LIMIT 1', (sender, ))
-        
+        try:
+            row=cur.fetchone()
+            sender_id=row[0]
+            senders[sender]=sender_id
+        except:
+            print('cannot retrieve sender id', sender)
+            break
+
+    if subject_id is None:
+        cur.execute('INSERT OR IGNORE INTO Subjects(subject) VALUES(?)', (subject,))
+        conn.commit()
+        cur.execute('SELECT FROM Subjects WHERE subject=? LIMIT 1', (subject, ))
+        try:
+            row=cur.fetchone()
+            subject_id=row[0]
+            subjects[subject]=subject_id
+        except:
+            print('cannot retrieve subject id', subject)
+            break
+
+    cur.execute('INSERT OR IGNORE INTO Messages (guid, sender_id, subject_id, sent_at, headers, body) VALUES (?,?,?,datetime(?),?,?)'),
+            (guid, sender_id, subject_id, sent_at, zlib.compress(message_row[0].encode()), zlib.compress(message_row[1].encode())))
+    conn.commit()
+    cur.execute('SELECT id FROM Message WHERE guid=? LIMIT 1', (guid, ))
+    try:
+        row=cur.fetchone()
+        message=row[0]
+        guides[guid]=message_id
+    except:
+        print('Could not retrieve guid id', guid)
+        break
+
+cur.close()
+cur_1.close()
