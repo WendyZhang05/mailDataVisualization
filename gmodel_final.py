@@ -58,10 +58,10 @@ def fixsender(sender, allsenders=None):
     dns=dnsmapping.get(dns,dns)
     return mpieces[0]+"@"+dns
 
-def parsemaildata(md):
+def parsemaildate(md):
     #check if dateutil is available
     try:
-        pdate=parse.parse(tdate)
+        pdate=parse.parse(md)
         #example of ISO format '2002-12-04'
         test_at=pdate.isoformat()
         return test_at
@@ -199,6 +199,7 @@ for message_row in cur_1:
     parsed=parseheader(hdr, allsenders)
     if parsed is None: continue
     (guid,sender,subject,sent_at)=parsed
+    print("parsed value is", parsed)
 
     sender=mapping.get(sender, sender)
 
@@ -215,7 +216,7 @@ for message_row in cur_1:
     if sender_id is None:
         cur.execute('INSERT OR IGNORE INTO Senders(sender) VALUES(?)', (sender,))
         conn.commit()
-        cur.execute('SELECT FROM Senders WHERE sender=? LIMIT 1', (sender, ))
+        cur.execute('SELECT id FROM Senders WHERE sender=? LIMIT 1', (sender, ))
         try:
             row=cur.fetchone()
             sender_id=row[0]
@@ -227,7 +228,7 @@ for message_row in cur_1:
     if subject_id is None:
         cur.execute('INSERT OR IGNORE INTO Subjects(subject) VALUES(?)', (subject,))
         conn.commit()
-        cur.execute('SELECT FROM Subjects WHERE subject=? LIMIT 1', (subject, ))
+        cur.execute('SELECT id FROM Subjects WHERE subject=? LIMIT 1', (subject, ))
         try:
             row=cur.fetchone()
             subject_id=row[0]
@@ -240,11 +241,11 @@ for message_row in cur_1:
             (guid, sender_id, subject_id, sent_at,
             zlib.compress(message_row[0].encode()), zlib.compress(message_row[1].encode())))
     conn.commit()
-    cur.execute('SELECT id FROM Message WHERE guid=? LIMIT 1', (guid, ))
+    cur.execute('SELECT id FROM Messages WHERE guid=? LIMIT 1', (guid, ))
     try:
         row=cur.fetchone()
-        message=row[0]
-        guides[guid]=message_id
+        message_id=row[0]
+        guids[guid]=message_id
     except:
         print('Could not retrieve guid id', guid)
         break
